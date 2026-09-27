@@ -4,7 +4,7 @@
 
 
 <p align="center">
-  <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="450"/>
+  <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="600"/>
 </p>
 
 ### Natural-Language Data Analysis with Gemini, LangGraph & DuckDB
@@ -19,10 +19,6 @@
   <img src="https://img.shields.io/badge/Plotly-Visualization-3F4F75?logo=plotly&logoColor=white"/>
 </p>
 
-<p>
-  <img src="https://img.shields.io/github/stars/mariam2004/ai-data-analyst-agent?style=flat"/>
-  <img src="https://img.shields.io/github/license/mariam2004/ai-data-analyst-agent?style=flat"/>
-</p>
 
 </div>
 
