@@ -4,7 +4,9 @@ A small, portfolio-friendly AI agent that lets you upload a CSV/Excel file,
 ask questions about it in plain English, and get data-grounded answers,
 SQL/Pandas analysis, and Plotly charts — without the LLM ever inventing a
 number.
-
+<p align="center">
+  <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="180"/>
+</p>
 ## 1. Overview
 
 Upload a dataset, then chat with it:
