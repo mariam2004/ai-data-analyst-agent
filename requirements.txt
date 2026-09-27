@@ -1,0 +1,11 @@
+streamlit>=1.38
+pandas>=2.2
+openpyxl>=3.1
+duckdb>=1.0
+plotly>=5.22
+langchain>=0.3
+langgraph>=0.2
+google-genai>=0.3
+python-dotenv>=1.0
+sentence-transformers>=3.0
+numpy>=1.26
