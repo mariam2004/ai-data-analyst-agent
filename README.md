@@ -1,4 +1,6 @@
-# AI Data Analyst Agent
+<div align="center">
+
+# 🤖 AI Data Analyst Agent
 
 A small, portfolio-friendly AI agent that lets you upload a CSV/Excel file,
 ask questions about it in plain English, and get data-grounded answers,
@@ -7,6 +9,33 @@ number.
 <p align="center">
   <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="450"/>
 </p>
+
+### Natural-Language Data Analysis with Gemini, LangGraph & DuckDB
+
+<p>
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Google%20Gemini-LLM-4285F4?logo=google&logoColor=white"/>
+  <img src="https://img.shields.io/badge/LangGraph-Agent%20Workflow-1C3C3C"/>
+  <img src="https://img.shields.io/badge/DuckDB-SQL-FFF000?logo=duckdb&logoColor=black"/>
+  <img src="https://img.shields.io/badge/Pandas-Data%20Analysis-150458?logo=pandas&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Plotly-Visualization-3F4F75?logo=plotly&logoColor=white"/>
+</p>
+
+<p>
+  <img src="https://img.shields.io/github/stars/mariam2004/ai-data-analyst-agent?style=flat"/>
+  <img src="https://img.shields.io/github/license/mariam2004/ai-data-analyst-agent?style=flat"/>
+</p>
+
+</div>
+
+---
+
+A small, portfolio-friendly AI agent that lets you upload a CSV/Excel file,
+ask questions about it in plain English, and get data-grounded answers,
+SQL/Pandas analysis, and Plotly charts — without the LLM ever inventing a
+number.
+
 ## 1. Overview
 
 Upload a dataset, then chat with it:
