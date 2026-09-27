@@ -5,7 +5,7 @@ ask questions about it in plain English, and get data-grounded answers,
 SQL/Pandas analysis, and Plotly charts — without the LLM ever inventing a
 number.
 <p align="center">
-  <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="350"/>
+  <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="450"/>
 </p>
 ## 1. Overview
 
