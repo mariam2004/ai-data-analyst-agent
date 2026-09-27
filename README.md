@@ -4,10 +4,9 @@
 
 
 <p align="center">
-  <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="600"/>
+  <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="700"/>
 </p>
 
-### Natural-Language Data Analysis with Gemini, LangGraph & DuckDB
 
 <p>
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white"/>
