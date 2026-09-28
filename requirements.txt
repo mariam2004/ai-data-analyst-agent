@@ -1,11 +1,28 @@
+# AI Data Analyst Agent - runtime dependencies
+# Verified against the imports in app.py, agent.py, tools.py, memory.py,
+# data_utils.py, report.py and prompts.py. Tested on Python 3.12.
+
+# --- User interface (app.py) ---
 streamlit>=1.38
-pandas>=2.2
-openpyxl>=3.1
+python-dotenv>=1.0
+
+# --- Data handling (data_utils.py, tools.py, memory.py, report.py) ---
+pandas>=2.2,<4
+numpy>=1.26
+openpyxl>=3.1        # reads .xlsx via pandas.read_excel
+xlrd>=2.0.1          # reads legacy .xls via pandas.read_excel (app accepts .xls)
+
+# --- SQL analytics and charts (tools.py) ---
 duckdb>=1.0
 plotly>=5.22
-langchain>=0.3
-langgraph>=0.2
-google-genai>=0.3
-python-dotenv>=1.0
+
+# --- LLM and agent workflow (agent.py) ---
+google-genai>=1.0    # `from google import genai` (Gemini client)
+langgraph>=0.2       # StateGraph workflow
+
+# --- Semantic memory (memory.py) ---
 sentence-transformers>=3.0
-numpy>=1.26
+
+# --- PDF report (report.py) ---
+reportlab>=4.0
+matplotlib>=3.8
