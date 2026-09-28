@@ -79,10 +79,6 @@ Node by node (`agent.py`):
 
 LangGraph is imported only in `agent.py` (`from langgraph.graph import END, StateGraph`). It provides the state machine: `DataAnalystAgent._build_graph()` registers the seven nodes above on a `StateGraph(AgentState)`, wires the edges, adds the conditional retry edge, and compiles the graph. `DataAnalystAgent.ask()` calls `graph.invoke(...)` once per user question. The shared state type is `AgentState` (a `TypedDict`).
 
-### LangChain
-
-**LangChain is not used.** No file imports `langchain` or any `langchain_*` package. Earlier documentation listed it, but the code does not need it, so it is not in `requirements.txt`. (LangGraph installs its own `langchain-core` dependency automatically; the project never imports it directly.)
-
 ## 3. AI / LLM integration
 
 - **Provider / SDK:** Google Gemini through the `google-genai` SDK (`from google import genai`).
