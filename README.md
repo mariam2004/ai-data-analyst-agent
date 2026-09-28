@@ -1,250 +1,251 @@
-<div align="center">
+# AI Data Analyst Agent
 
-# 🤖 AI Data Analyst Agent
+A Streamlit app that lets you upload a CSV or Excel file, ask questions about it in plain English, and get answers grounded in tool output. Google Gemini interprets the question, picks tools and writes the explanation; DuckDB, Pandas and Plotly do the actual calculating and charting. The app can also generate a rule-based PDF report of the dataset.
 
+## Table of contents
 
-<p align="center">
-  <img src="assets/chatbot.png" alt="AI Data Analyst Agent" width="700"/>
-</p>
-
-
-<p>
-  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Google%20Gemini-LLM-4285F4?logo=google&logoColor=white"/>
-  <img src="https://img.shields.io/badge/LangGraph-Agent%20Workflow-1C3C3C"/>
-  <img src="https://img.shields.io/badge/DuckDB-SQL-FFF000?logo=duckdb&logoColor=black"/>
-  <img src="https://img.shields.io/badge/Pandas-Data%20Analysis-150458?logo=pandas&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Plotly-Visualization-3F4F75?logo=plotly&logoColor=white"/>
-</p>
-
-
-</div>
+1. [Features](#1-features)
+2. [Architecture and workflow](#2-architecture-and-workflow)
+3. [AI / LLM integration](#3-ai--llm-integration)
+4. [Tools](#4-tools)
+5. [Memory](#5-memory)
+6. [Streamlit application](#6-streamlit-application)
+7. [PDF report](#7-pdf-report)
+8. [Supported data formats](#8-supported-data-formats)
+9. [Project structure](#9-project-structure)
+10. [Technologies](#10-technologies)
+11. [Installation](#11-installation)
+12. [Configuration (`.env`)](#12-configuration-env)
+13. [Running the app](#13-running-the-app)
+14. [Usage](#14-usage)
+15. [Limitations and requirements](#15-limitations-and-requirements)
 
 ---
 
-A small, portfolio-friendly AI agent that lets you upload a CSV/Excel file,
-ask questions about it in plain English, and get data-grounded answers,
-SQL/Pandas analysis, and Plotly charts — without the LLM ever inventing a
-number.
+## 1. Features
 
-## 1. Overview
+- Chat with one uploaded dataset in natural language.
+- Automatic dataset profile: row and column counts, dtypes, missing values, duplicate rows, numeric / categorical / datetime column lists, and basic numeric statistics.
+- Read-only SQL analytics with DuckDB. The uploaded DataFrame is exposed as a table named `data`.
+- Pandas analysis for period-over-period diagnostic ("why") questions, correlation and missing-value analysis.
+- Plotly charts (line, bar, scatter) chosen automatically from the shape of the result.
+- Follow-up questions ("show them by region", "only for 2025") resolved through session memory.
+- Retry of failed SQL through a conditional edge in the workflow (see [limitations](#15-limitations-and-requirements) for a caveat).
+- "Analysis details" panel under each answer showing the tools used, the SQL that ran, and validation notes.
+- One-click PDF data report with tables and charts, generated without any LLM call.
 
-Upload a dataset, then chat with it:
-
-- "What are the top 5 products by revenue?"
-- "Which region has the highest profit?"
-- "Why did sales decrease in Q3?"
-- "Create a visualization of monthly sales."
-- "Show them by region." (follow-up, resolved via memory)
-- "Only for 2025." (refinement, resolved via memory)
-
-The LLM (Gemini) never computes anything itself. It only understands the
-question, decides which tool to call, and explains the tool's results.
-
-## 2. Features
-
-- Natural-language Q&A over an uploaded CSV/XLSX/XLS file
-- Automatic dataset profiling (rows, columns, dtypes, missing values,
-  duplicates, numeric/categorical/datetime columns)
-- Read-only analytical SQL via DuckDB, with destructive statements blocked
-- Pandas-based analysis for correlation, missing-value analysis, and
-  period-over-period diagnostic breakdowns
-- Automatic Plotly chart-type selection (line / bar / histogram / scatter)
-- Short-term conversation memory for natural follow-up questions
-- Lightweight semantic memory (RAG) over conversation facts, using
-  `sentence-transformers/all-MiniLM-L6-v2`
-- Basic SQL error recovery (up to 2 automatic retries)
-- Streamlit chat UI with an expandable "Analysis details" panel showing the
-  tool used and the generated SQL
-- Generic PDF data analyst report generation with automatic dataset analysis,
-  data-quality checks, missing-value breakdowns, and dynamic column-type detection
-
-## 3. Architecture
+## 2. Architecture and workflow
 
 ```text
 User
   |
-Streamlit (app.py)
+Streamlit UI (app.py)
   |
-LangGraph Agent (agent.py)
+DataAnalystAgent (agent.py, LangGraph StateGraph)
   |
-retrieve memory --> understand question --> decide tool
-                                                 |
-                                            execute tool
-                                           /     |      \
-                                      DuckDB  Pandas   Plotly
-                                           \     |      /
-                                            validate result
-                                                 |
-                                          Gemini (explain)
-                                                 |
-                                            save memory
-                                                 |
-                                            Final Answer
+retrieve_memory -> understand_question -> decide_tool -> execute_tool
+                                                             |
+                                            +----------------+----------------+
+                                            |                |                |
+                                        DuckDB SQL        Pandas           Plotly
+                                            |                |                |
+                                            +----------------+----------------+
+                                                             |
+                                                      validate_result
+                                                   /                 \
+                                         (SQL error, retry)        (continue)
+                                                 |                     |
+                                           execute_tool         generate_answer
+                                                                       |
+                                                                  save_memory
+                                                                       |
+                                                                     END
 ```
 
-Strict separation of concerns:
+Node by node (`agent.py`):
 
-```text
-LLM (Gemini)  -> understands, plans, chooses tools, explains results
-Tools         -> DuckDB / Pandas / Plotly actually calculate and render
-Memory        -> short-term conversation transcript
-RAG           -> retrieves relevant conversation memory for follow-ups
-```
+| Node | What it does |
+|---|---|
+| `retrieve_memory` | Builds the memory context for the question (structured last-analysis context plus semantic notes) and attaches the dataset profile text. |
+| `understand_question` | Asks Gemini to rewrite the question as one self-contained request, resolving references such as "them" using memory and the last 6 chat messages. |
+| `decide_tool` | Asks Gemini for a JSON list of tools. Valid values: `sql`, `pandas`, `chart`, `profile`. Falls back to `["sql"]` if the reply is unparseable or contains no valid tool. |
+| `execute_tool` | Runs the selected tools (details in [Tools](#4-tools)). |
+| `validate_result` | Adds notes when SQL errored or returned no rows. |
+| conditional edge `_should_retry` | Returns to `execute_tool` while a SQL error exists and the retry counter is below `MAX_SQL_RETRIES = 2`; otherwise continues. |
+| `generate_answer` | Returns a fixed "No matching records were found for this query." message when SQL returned zero rows and Pandas was not selected. Otherwise asks Gemini to write the answer from tool results only. |
+| `save_memory` | Stores the turn and the structured analysis context. |
 
-The dataset itself is always the source of truth for any number that
-appears in an answer.
+### Where LangGraph is used, and why
 
-## 4. Tech stack
+LangGraph is imported only in `agent.py` (`from langgraph.graph import END, StateGraph`). It provides the state machine: `DataAnalystAgent._build_graph()` registers the seven nodes above on a `StateGraph(AgentState)`, wires the edges, adds the conditional retry edge, and compiles the graph. `DataAnalystAgent.ask()` calls `graph.invoke(...)` once per user question. The shared state type is `AgentState` (a `TypedDict`).
 
-- **UI:** Streamlit
-- **LLM:** Google Gemini (`google-genai` SDK), model configurable in one
-  place (`agent.py` -> `DEFAULT_MODEL`)
-- **Agent orchestration:** LangGraph + LangChain
-- **SQL analytics:** DuckDB (in-memory, queries a Pandas DataFrame directly)
-- **Data wrangling:** Pandas
-- **Visualization:** Plotly
-- **Reporting:** ReportLab + Matplotlib
-- **PDF analysis:** Automatic numeric, categorical, datetime, metadata, and identifier detection
-- **Conversation memory:** in-process transcript
-- **Semantic memory / RAG:** `sentence-transformers` embeddings, small
-  in-memory vector store (no external vector DB)
+### LangChain
 
-## 5. Project structure
+**LangChain is not used.** No file imports `langchain` or any `langchain_*` package. Earlier documentation listed it, but the code does not need it, so it is not in `requirements.txt`. (LangGraph installs its own `langchain-core` dependency automatically; the project never imports it directly.)
+
+## 3. AI / LLM integration
+
+- **Provider / SDK:** Google Gemini through the `google-genai` SDK (`from google import genai`).
+- **Model:** set in one place, `DEFAULT_MODEL` in `agent.py` (currently `"gemini-3.5-flash-lite"`). Change that constant to switch models.
+- **Client:** `GeminiClient.generate(system_instruction, user_prompt)` wraps `client.models.generate_content` with `temperature = 0.2`. Transient API errors (HTTP 408, 429, 500, 502, 503, 504) are retried up to 3 attempts in total, with exponential backoff and jitter. Other errors are raised.
+- **Prompts:** all in `prompts.py`:
+  - `SYSTEM_PROMPT` — rules: never calculate numbers, never invent results, read-only SQL only.
+  - `UNDERSTAND_QUESTION_PROMPT` — follow-up resolution.
+  - `TOOL_SELECTION_PROMPT` — tool choice as JSON.
+  - `SQL_GENERATION_PROMPT` — one DuckDB `SELECT` against table `data`.
+  - `FINAL_ANSWER_PROMPT` — answer strictly from tool results.
+  - `DIAGNOSTIC_BREAKDOWN_PROMPT` — summary for "why" questions using computed period comparisons.
+- **What is sent to Gemini:** the dataset profile text (schema, dtypes, missing counts, duplicates, column groups), the question, memory context, and tool results (SQL text, the first 20 rows of the SQL result, and Pandas results truncated to 3,000 characters). The full DataFrame is never sent, but aggregated result rows and stored result samples can be.
+- The PDF report (`report.py`) makes no LLM calls.
+
+## 4. Tools
+
+Implemented in `tools.py` and dispatched from `DataAnalystAgent._execute_tool` in `agent.py`.
+
+**Profile tool** (`run_profile_tool`) — runs `profile_data` from `data_utils.py`. Used when the LLM selects `profile`.
+
+**SQL tool** (`run_sql_tool`, DuckDB) — runs in an in-memory DuckDB connection with the DataFrame registered as `data`. `validate_sql` only accepts a single statement that starts with `SELECT` or `WITH`, and rejects queries containing any of these keywords: `drop, delete, update, insert, alter, create, attach, detach, copy, pragma, export, import, install, load, call, vacuum, replace, grant, revoke`. The SQL is generated by Gemini (code fences are stripped). It runs when `sql` is selected, and also for any question the code treats as diagnostic.
+
+**Pandas tools** — `agent._run_pandas_analysis` uses:
+
+- `pandas_period_comparison`: for diagnostic questions (containing words such as *why, decrease, decline, drop, increase, spike, cause*), compares a metric between a quarter and the previous quarter, with a breakdown by one dimension. The year and quarter are parsed from the question (`20xx`, `Qn`), otherwise the latest ones in the data are used. It uses the first datetime-typed column, the first numeric column and the first text/category column.
+- `pandas_correlation`: when the question contains "correlation".
+- `pandas_missing_analysis`: when the question contains "missing".
+
+`pandas_describe` exists in `tools.py` but is not called by the agent.
+
+**Chart tool** (`build_chart`, `suggest_chart_type`, Plotly Express) — runs when `chart` is selected. It charts the SQL result (x = first date/month-named column, else first non-numeric column; y = first numeric column; optional colour = second non-numeric column). If there is no SQL result, it plots the "change by dimension" bar chart from a period comparison. It never charts an empty SQL result. Automatic selection only picks `line`, `bar` or `scatter`; `build_chart` also supports `histogram` and `stacked_bar`, but the agent never chooses them.
+
+## 5. Memory
+
+Implemented in `memory.py` and held in the Streamlit session; nothing is written to disk.
+
+1. **Conversation memory** — the transcript. The last 6 messages are passed to `understand_question`. Assistant answers are stored truncated to 280 characters.
+2. **Structured analysis memory** — the latest analysis only: question, resolved question, SQL, tools used, chart type, up to 10 result rows, result columns and distinct entity values. This is what lets "them" refer to the previous top-N result.
+3. **Semantic memory** — short notes embedded with `sentence-transformers/all-MiniLM-L6-v2` and kept in an in-memory list. The 3 most similar notes to a new question are added to the prompt. The model loads lazily on first use. If it cannot be loaded, notes are silently skipped and the agent continues without semantic recall.
+
+Memory is reset whenever a different file is uploaded.
+
+## 6. Streamlit application
+
+`app.py` is the entry point.
+
+1. Loads `.env` with `python-dotenv` and reads `GEMINI_API_KEY`. If missing, an error banner is shown and chat is disabled.
+2. File uploader (`csv`, `xlsx`, `xls`). On upload, the file is loaded, validated and profiled. If the dataset differs from the one in session state, chat history and memory are reset and a new `DataAnalystAgent` is built (only when an API key exists).
+3. "Dataset overview" expander: rows, columns, duplicate rows, column dtypes, missing values.
+4. Chat: each answer can include the result table, a Plotly chart, and an "Analysis details" expander (tools used, SQL, notes). Errors from the agent are shown in the chat instead of crashing the app.
+5. "Data Analyst Report" section with a Generate button and a PDF download button (see below).
+
+## 7. PDF report
+
+`report.py` → `generate_pdf_report(df, dataset_name)` builds an A4 PDF with ReportLab and Matplotlib charts, using rule-based column classification (numeric, categorical, datetime, identifier and metadata columns are detected from names and values). Sections: Executive Summary, Dataset Overview, Key Numeric Metrics, Categorical Analysis, Time-Based Analysis, Category vs Numeric Analysis, Numeric Relationship, Data Quality, Detected Column Types. Sections that lack suitable columns are skipped. Limits in the code include the first 10 numeric columns, the first 4 categorical columns, top-10 category tables, and the 15 columns with the most missing values. Scatter plots use at most 2,000 rows. The download is named `AI_Data_Analyst_Report.pdf`.
+
+## 8. Supported data formats
+
+Defined in `data_utils.load_file` and the uploader in `app.py`:
+
+| Extension | Reader | Notes |
+|---|---|---|
+| `.csv` | `pandas.read_csv` | Default pandas parsing (comma delimiter, default encoding). Errors for empty or malformed files are reported. |
+| `.xlsx` | `pandas.read_excel` | Requires `openpyxl`. First sheet only. |
+| `.xls` | `pandas.read_excel` | Requires `xlrd`. First sheet only. |
+
+Any other extension is rejected. Files with no rows or no columns are rejected.
+
+## 9. Project structure
 
 ```text
 ai-data-analyst-agent/
-├── app.py            # Streamlit UI
-├── agent.py          # LangGraph workflow + Gemini client
-├── tools.py          # DuckDB / Pandas / Plotly tools
-├── data_utils.py      # File loading, validation, profiling
-├── memory.py         # Conversation memory + lightweight RAG
-├── prompts.py        # All LLM prompts
-├── report.py         # Generic PDF data analyst report generation
-├── requirements.txt
-├── .env               # GEMINI_API_KEY goes here
-├── data/              # Place your own sample CSV/Excel file here
-└── README.md
+├── app.py             # Streamlit UI: upload, overview, chat, PDF report
+├── agent.py           # GeminiClient + LangGraph workflow (DataAnalystAgent)
+├── tools.py           # SQL validation/execution (DuckDB), Pandas analyses, Plotly charts
+├── data_utils.py      # File loading, validation, dataset profiling
+├── memory.py          # Conversation, structured, and semantic (embedding) memory
+├── prompts.py         # All LLM prompts
+├── report.py          # PDF report generation (ReportLab + Matplotlib)
+├── requirements.txt   # Python dependencies
+├── .env.example       # Template for GEMINI_API_KEY
+└── data/
+    └── .gitkeep       # Empty folder for your own datasets (no sample data included)
 ```
 
-## 6. Installation
+The uploaded archive contains exactly this one flat set of files. No nested copies, old duplicates or extra packages were found, so every `.py` file above belongs to the running application. The app does not read `data/`; you upload files through the UI.
+
+## 10. Technologies
+
+| Purpose | Library |
+|---|---|
+| UI | Streamlit |
+| LLM | Google Gemini via `google-genai` |
+| Agent workflow | LangGraph |
+| SQL analytics | DuckDB |
+| Data handling | Pandas, NumPy, openpyxl, xlrd |
+| Charts | Plotly (chat), Matplotlib (PDF) |
+| PDF | ReportLab |
+| Semantic memory | sentence-transformers |
+| Configuration | python-dotenv |
+
+## 11. Installation
+
+Requirements: Python 3.10 or newer (developed and smoke-tested on Python 3.12) and a Gemini API key.
 
 ```bash
-git clone <this-repo>
+git clone <your-repository-url>
 cd ai-data-analyst-agent
+
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
 pip install -r requirements.txt
 ```
 
-## 7. Environment variable setup
+`sentence-transformers` pulls in PyTorch, so the first install is large.
 
-Edit the `.env` file in the project root:
+## 12. Configuration (`.env`)
 
-```env
-GEMINI_API_KEY=your_api_key_here
+Copy the template and add your own key:
+
+```bash
+cp .env.example .env             # Windows: copy .env.example .env
 ```
 
-Get a key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-The key is loaded via `python-dotenv` and is never printed or logged.
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+```
 
-## 8. How to run
+Create a key in [Google AI Studio](https://aistudio.google.com/app/apikey). Never commit `.env`; add it to your `.gitignore` (the archive does not include a `.gitignore`).
+
+## 13. Running the app
 
 ```bash
 streamlit run app.py
 ```
 
-Then open the local URL Streamlit prints (usually `http://localhost:8501`).
+Open the URL Streamlit prints (usually `http://localhost:8501`).
 
-Place any dataset you'd like to test with inside `data/` (this repo does
-not ship a sample file — bring your own CSV or Excel export), then upload it
-through the UI.
+## 14. Usage
 
-## 9. Example questions
+1. Upload a `.csv`, `.xlsx` or `.xls` file.
+2. Review the "Dataset overview".
+3. Ask a question in the chat box, for example:
+   - "What are the top 5 products by revenue?"
+   - "Show them by region." (follow-up)
+   - "Create a visualization of monthly sales."
+   - "How many rows have missing revenue?"
+   - "Why did sales decrease in Q3?"
+4. Open "Analysis details" under an answer to see the tools used and the SQL.
+5. To get the PDF, scroll to "Data Analyst Report", click **Generate PDF Report**, then **Download PDF Report**.
 
-- "What are the top 5 products by revenue?"
-- "Which region has the highest profit?"
-- "How many rows have missing revenue?"
-- "Create a visualization of monthly sales."
-- "Why did sales decrease in Q3?"
-- "Show them by region."
-- "Only for 2025."
+The first question in a session may be slower while the embedding model loads.
 
-## 10. Datasets Used
+## 15. Limitations and requirements
 
-The project was tested with publicly available tabular datasets from
-Tableau Public's official Sample Data collection.
-
-### Tableau Superstore Sales
-
-A fictional retail dataset containing product, sales, profit, quantity,
-discount, customer, and regional information.
-
-🔗 [Tableau Public — Sample Data](https://public.tableau.com/app/resources/sample-data)
-
-### The 2014 Inc. 5000
-
-A dataset containing information about the 5,000 fastest-growing private
-companies listed in the 2014 Inc. 5000, including revenue, growth,
-employees, industry, and location.
-
-🔗 [Tableau Public — Sample Data](https://public.tableau.com/app/resources/sample-data)
-
-## 11. How memory works
-
-Two lightweight layers work together so follow-up questions feel natural:
-
-1. **Short-term conversation memory** — the recent chat transcript is kept
-   in `AgentMemory.conversation` and fed into the "understand question" step
-   so the agent can resolve pronouns and references ("them", "same but...").
-2. **Lightweight semantic memory (RAG)** — after each turn, a short factual
-   note (e.g. "Q: top 5 products by revenue -> A, B, C, D, E") is embedded
-   with `all-MiniLM-L6-v2` and stored in a small in-memory vector store.
-   When a new question comes in, the most semantically relevant notes are
-   retrieved and added to the prompt as context.
-
-RAG here is **only** used for conversation/context memory — it never
-analyzes the dataset itself. All numeric analysis always goes through
-DuckDB or Pandas.
-
-Memory is in-process and per-session; it does not persist across
-application restarts in this version.
-
-## 12. Generated Reports
-
-Example PDF reports generated by the application are included in the
-
-eports/ directory.
-
-- 📄 [Superstore Data Analyst Report](reports/AI_Data_Analyst_Report_Superstore.pdf)
-- 📄 [Inc. 5000 Data Analyst Report](reports/AI_Data_Analyst_Report_Inc5000.pdf)
-
-These reports demonstrate the generic PDF reporting capability of the
-application across different dataset structures.
-
-## 13. Security / limitations
-
-- Only single, read-only `SELECT`/`WITH` SQL statements are allowed.
-  Destructive keywords (`DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`,
-  `CREATE`, `ATTACH`, `COPY`, etc.) are blocked before execution.
-- The LLM never runs arbitrary generated Python — Pandas operations are
-  limited to a small, controlled set of functions in `tools.py`.
-- No authentication, persistence, or multi-user isolation is implemented;
-  this is a single-session demo/portfolio app, not a production system.
-- Diagnostic ("why") analysis is heuristic (period comparison + breakdown
-  by one dimension) and explicitly avoids claiming causation the data
-  doesn't support.
-- Large files may be slow to profile/embed since everything runs in-process
-  with no background workers.
-- PDF reports are generated dynamically from the uploaded dataset and use
-  automatic schema detection rather than a fixed business-specific schema.
-
-## 14. Future improvements
-
-- Persist conversation and semantic memory across sessions
-- Support multiple uploaded datasets and joins between them
-- Add authentication and multi-user session isolation
-- Cache repeated SQL/Pandas computations
-- Add more chart types and user-driven chart customization
-- Stream the LLM's final answer token-by-token in the UI
+- **Internet and API key required** for chat: every question makes several Gemini calls (typically question rewriting, tool choice, SQL generation, answer). The PDF report works without them.
+- **First semantic-memory use** loads `all-MiniLM-L6-v2`; if it is not cached locally, `sentence-transformers` needs to download it.
+- **SQL retry is not reliably bounded.** `_should_retry` increments its counter by modifying state inside a conditional edge, and that change is not persisted by LangGraph. In a test with a fake LLM that always returned invalid SQL, the loop kept retrying until LangGraph raised `GraphRecursionError` (thousands of attempts) instead of stopping after 2. The app shows this as an error message in chat. The code was not modified.
+- **Diagnostic analysis depends on real datetime columns.** `_find_col` selects only datetime-typed columns, so dates stored as text are not used for period comparison (the profile can still label them as datetime). Any question containing words like "increase" or "drop" is treated as diagnostic and also runs the Pandas comparison, and it compares calendar quarters only.
+- **Single dataset, single sheet, single session.** No persistence, authentication or multi-user isolation. Excel files use their first sheet only.
+- **Whole file is loaded into memory**; large files may be slow to profile and query.
+- **Answer quality depends on the LLM.** SQL is validated for read-only safety, but its correctness is not verified beyond execution errors and empty-result checks.
+- **Pandas 3 note:** the profiling code selects text columns with `include=["object", "category"]`, which works on pandas 3 but emits a deprecation warning. `requirements.txt` therefore caps pandas below 4.
+- **Model name:** `DEFAULT_MODEL` in `agent.py` must be a model available to your API key; change it there if requests fail.
