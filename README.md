@@ -234,14 +234,3 @@ Open the URL Streamlit prints (usually `http://localhost:8501`).
 
 The first question in a session may be slower while the embedding model loads.
 
-## 15. Limitations and requirements
-
-- **Internet and API key required** for chat: every question makes several Gemini calls (typically question rewriting, tool choice, SQL generation, answer). The PDF report works without them.
-- **First semantic-memory use** loads `all-MiniLM-L6-v2`; if it is not cached locally, `sentence-transformers` needs to download it.
-- **SQL retry is not reliably bounded.** `_should_retry` increments its counter by modifying state inside a conditional edge, and that change is not persisted by LangGraph. In a test with a fake LLM that always returned invalid SQL, the loop kept retrying until LangGraph raised `GraphRecursionError` (thousands of attempts) instead of stopping after 2. The app shows this as an error message in chat. The code was not modified.
-- **Diagnostic analysis depends on real datetime columns.** `_find_col` selects only datetime-typed columns, so dates stored as text are not used for period comparison (the profile can still label them as datetime). Any question containing words like "increase" or "drop" is treated as diagnostic and also runs the Pandas comparison, and it compares calendar quarters only.
-- **Single dataset, single sheet, single session.** No persistence, authentication or multi-user isolation. Excel files use their first sheet only.
-- **Whole file is loaded into memory**; large files may be slow to profile and query.
-- **Answer quality depends on the LLM.** SQL is validated for read-only safety, but its correctness is not verified beyond execution errors and empty-result checks.
-- **Pandas 3 note:** the profiling code selects text columns with `include=["object", "category"]`, which works on pandas 3 but emits a deprecation warning. `requirements.txt` therefore caps pandas below 4.
-- **Model name:** `DEFAULT_MODEL` in `agent.py` must be a model available to your API key; change it there if requests fail.
